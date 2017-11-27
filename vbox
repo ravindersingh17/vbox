@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+
+#Set out mapping of vms
+
+declare -A vmmapping=(
+["ubuntuvm"]="Ubuntu GUI VM"
+["ubuntuserver"]="Ubuntu Server VM"
+["freebsdvm"]="FreeBSD Server VM"
+["windowsvm"]="Windows VM"
+["fedoraserver"]="Fedora Server VM"
+["knoppixvm"]="Knoppix VM"
+)
+
+escape() {
+    echo $(printf '%q' "$1")
+}
+
+startvm() {
+    VBoxManage startvm "$1" --type headless
+    return $?
+}
+
+savevm() {
+    VBoxManage controlvm "$1" savestate --type headless
+    return $?
+}
+
+poweroffvm() {
+    VBoxManage controlvm "$1" poweroff --type headless
+    return $?   
+}
+
+shutdownvm() {
+    VBoxManage controlvm "$1" acpipowerbutton --type headless
+    return $?
+}
+
+resetvm() {
+    VBoxManage controlvm "$1" reset --type headless
+    return $?
+}
+
+checkerror() {
+    if [ $1 -eq 0 ]; then
+        echo "$2"
+    else 
+        echo "$3"
+    fi
+}
+
+isoattach() {
+    VBoxManage storageattach "$1" --storagectl IDE --port 0 --device 0 --type dvddrive \
+        --medium "$(cygpath -w "$2")"
+    return $?
+}
+
+modifyram() {
+    VBoxManage modifyvm "$1" --memory $2
+    return $?
+}
+
+createvm() {
+    VBoxManage createvm --name "$1" --ostype $2 --register
+    checkerror $? "Created The VM" "Failed to create VM"
+    VBoxManage storagectl "$1" --name IDE --add ide
+    checkerror $? "Added ide controller" "Failed to add ide controller"
+    VBoxManage storagectl "$1" --name SATA --add sata
+    checkerror $? "Added sata controller" "Failed to add sata controller"
+    modifyram "$1" $3
+    checkerror $? "Modified RAM" "Failed to modify RAM"
+    mkdir "/cygdrive/d/VirtualBox VMs/$1"
+    checkerror $? "Added VM directory" "Failed to add VM directory"
+    VBoxManage createmedium disk --filename "$(cygpath -w "/cygdrive/d/VirtualBox VMs/$1/$1.vdi")" \
+        --size $(echo "$3*1024" | bc) --format VDI --variant Standard
+    checkerror $? "Created had disk" "Failed to create hard disk"
+    VBoxManage storageattach "$1" --storagectl SATA --port 0 --device 0 --type hdd \
+        --medium "$(cygpath -w "/cygdrive/d/VirtualBox VMs/$1/$1.vdi")"
+    checkerror $? "Attached hard disk" "Failed to attach hard disk"
+    VBoxManage modifyvm "$1" --nic1 nat --nic2 hostonly --nic3 intnet
+    checkerror $? "Attached network interfaces" "Failed to attach network interfaces"
+
+    RET=$?
+    if [ -z $6 ]; then
+        return $RET
+    fi
+    isoattach "$1" "$6" 
+}
+
+list() {
+    VBoxManage list vms
+    return $?
+}
+
+listrunning() {
+    VBoxManage list runningvms
+    return $?
+}
+
+if [ $# -lt 1 ]; then
+    echo "No action Specified. Usage: vbox <action> [parameters]"
+    exit 1
+fi
+
+case $1 in
+    start)
+        if [ $# -ne 2 ]; then
+            echo "No vmname specified. Usage: vbox start <vmname>"
+            exit 1
+        fi
+        startvm "$2"
+        ;;
+    save)
+        if [ $# -ne 2 ]; then
+            echo "No vmname specified. Usage vbox save <vmname>"
+            exit 1
+        fi
+        savevm "$2"
+        ;;
+    stop)
+        if [ $# -ne 2 ]; then
+            echo "No vmname specified. Usage vbox stop <vmname>."
+            exit 1
+        fi
+        poweroffvm "$2"
+        ;;
+    shutdown)
+        if [ $# -ne 2 ]; then
+            echo "No vmname specified. Usage: vbox shutdown <vmname>."
+            exit 1
+        fi
+        shutdownvm "$2"
+        ;;
+    reset)
+        if [ $# -ne 2 ]; then
+            echo "No vmname specified.Usage: vbox reset <vmname>."
+            exit 1
+        fi
+        resetvm "$2"
+        ;;
+
+    mappings)
+        mappings
+        ;;
+    list)
+        echo "List of all registered VMs"
+        list
+        ;;
+    listrunning)
+        echo "List of running VMs"
+        listrunning
+        ;;
+    adddvd)
+        if [ $# -ne 3 ]; then
+            echo "Parameters missing. Usage: vbox adddvd <vmname> <pathtoiso>"
+        else
+            isoattach "$2" "$3"
+        fi
+        ;;
+    modifyram)
+        if [ $# -ne 3 ]; then
+            echo "Parameters missing. Usage: vbox modifyram <vmname> <newramMB>"
+            exit 1
+        fi
+        modifyram "$2" $3
+        ;;
+
+    create)
+        if [ $# -lt 5 ]; then
+            echo "Parameters missing. Usage vbox create <vmnamefull> <ostype> <memory> <harddisk> [installiso]"
+            exit 1
+        fi
+        createvm "$2" $3 $4 $5 $6
+        ;;
+    *)
+        echo "Invalid action. Usage: start|save|stop|list|listrunning [vmname]"
+        exit 1
+esac
+
+
+
