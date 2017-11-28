@@ -64,9 +64,18 @@ class vbox:
     def help_create():
         print("Usage: vbox create --name <name> --host <hostname> --id <id> --ostype <ostype> --mem <mem> --disk <disk> [--iso <isopath>]")
 
-    def func_list(p):
+    def func_list(p, listof="all"):
         opts = p.parse_args()
-        print(opts)
+        if listof == "running": suffix = "runningvms"
+        elif listof == "all": suffix = "vms"
+        else: return
+
+        ret = executer.runwithoutput("VBoxManage list {0}".format(suffix))
+        if ret["returncode"] != 0:
+            print("Unable to get list of VMs")
+            return False
+        for line in ret["output"]: print(line)
+        return True
 
     def func_start(p):
         opts = p.parse_args()
