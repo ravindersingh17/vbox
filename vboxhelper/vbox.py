@@ -3,7 +3,7 @@
 import sys, os
 import argparse
 
-from vboxhelper import executer
+from vboxhelper.executer import executer
 
 class vbox:
 
@@ -74,12 +74,35 @@ class vbox:
         if ret["returncode"] != 0:
             print("Unable to get list of VMs")
             return False
-        for line in ret["output"]: print(line)
+        print(ret["output"])
         return True
 
-    def func_start(p):
+    def help_list():
+        print("Usage: vbox list")
+        return True
+
+    def func_listrunning(p):
+        return func_list(p, "running")
+
+
+    def func_start(p, gui=False):
         opts = p.parse_args()
-        print(opts)
+        if len(opts.cmd) != 2:
+            help_start()
+            return False
+        suffix = "--type headless"
+        if gui: suffix = ""
+        if executer.run("VBoxManage startvm \"{0}\" {1}".format(cmd[1], suffix)) != 0:
+            print "Unable to start VM"
+            return False
+        return True
+
+    def help_start():
+        print("Usage: vbox start <vmname>")
+        return True
+
+    def func_startgui(p):
+        return func_start(p, True)
 
     def func_addiso(p):
         opts = p.parse_args()
