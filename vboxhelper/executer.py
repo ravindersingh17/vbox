@@ -3,11 +3,9 @@ import os
 
 class executer:
     def run(command):
-        ret = subprocess.run(command, shell=True)
-        return ret.returncode
+        return subprocess.run(command, shell=True)
 
     def runwithoutput(command):
-        ret = subprocess.run(command.split(), stdout=subprocess.PIPE)
-        returncode = ret.returncode
-        output = ret.stdout.decode('utf-8')
-        return { 'returncode': returncode, 'output': output }
+        ret = subprocess.run(command, stdout=subprocess.PIPE, shell=True)
+        ret.output = ret.stdout.decode('utf-8')
+        return ret
