@@ -1,29 +1,53 @@
 #!/bin/env python3
 
-import sys, os
-import argparse
+import sys, os, re, argparse, platform
 
 from vboxhelper.executer import executer
 from vboxhelper.VBoxException import VBoxException
 
 class vbox:
+    """
+    Module that provides most of the functionality of VirtualBox manager
+    """
 
-    def _addiso(vmname, path):
-        if path == "additions":
-            pathfinal = path
+    def _getplatform():
+        ostype = platform.system()
+        if ostype == "Windows": return "WINDOWS"
+        elif ostype == "Linux": return "LINUX"
+        elif ostype[:6] == "CYGWIN": return "CYGWIN"
+        else: return False
+
+
+    def _addstoragectl(vmname, ctlname, ctltype):
+        vbox._shellrunner("VBoxManage storagectl \"{0}\" --name {1} --add {2}", (vmname, ctlname, ctltype))
+
+    def _getwinpath(path):
+        ret = vbox._shellrunner("cygpath -w \"{0}\"", (path, ), True)
+        return ret.output.strip()
+
+    def _getcygpath(path):
+        ret = vbox._shellrunner("cygpath \"{0}\"", (path.replace("\\", "\\\\"), ), True)
+        return ret.output.strip()
+
+    def _modifymem(vmname, mem):
+        vbox._shellrunner("VBoxManage modifyvm \"{0}\" --memory {1}", (vmname, mem))
+
+    def _storageattach(vmname, mediumpath, storagectl, disktype, port = 0, device = 0):
+        vbox._shellrunner("VBoxManage storageattach \"{0}\" --storagectl {1} --port {2} --device {3} --type {4} --medium \"{5}\"", (vmname, storagectl, port, device, disktype, mediumpath))
+
+    def _modifynic(vmname, nicnum, adaptertype):
+        vbox._shellrunner("VBoxManage modifyvm \"{0}\" --nic{1} {2}", (vmname, nicnum, adaptertype))
+
+    def _setextradata(vmname, datakey, datavalue):
+        vbox._shellrunner("VBoxManage setextradata \"{0}\" \"{1}\" \"{2}\"", (vmname, datakey, datavalue))
+
+    def _getextradata(vmname, datakey):
+        ret = vbox._shellrunner("VBoxManage getextradata \"{0}\" \"{1}\"", (vmname, datakey), True)
+        if ret.output.strip() == "No value set!": return None
         else:
-            runwithoutput("foo")
+            match = re.match("Value:\s*(.*)", ret.output.strip())
+            return match.group(1)
 
-        #executer.run("VBoxManage storageattach \"{0}\" --storagectl IDE --port 0 --device 0 --type dvddrive
-
-    def _iscygwin():
-        sysname = executer.runwithoutput("uname -s")["output"][0]
-        if sysname[:6] == "CYGWIN":
-            return True
-        return False
-
-    def _getActualPath():
-        pass
 
     def _shellrunner(cmd, params, returnoutput=False):
         """
@@ -48,7 +72,31 @@ class vbox:
         if ret.returncode != 0: raise VBoxException("VBoxManage returned error status:{0}".format(ret.returncode))
         return ret
 
+    def func_debug(p):
+        a = vbox._getextradata("Ubuntu GUI VM", "foo bar")
+        print("\"{0}\"".format(a))
 
+
+    def help_main():
+        """
+        The help function for help without parameters
+
+        Returns: String with help information
+        """
+        return("""Usage: vbox [action] [vmname] [parameters]
+        Action is:
+            help [action]
+            list
+            listrunning
+            create --name <name> --hostname <hostname> --id <ID> --ostype <ostype> --mem <memory> --disk <disksize> [--iso <isopath>]
+            start <vmname>
+            startgui <vmname>
+            reset <vmname>
+            poweroff <vmname>
+            powerbutton <vmname>
+            addiso <isopath> [--ctl <storage controller>] [--port <portnum] [--device <devicenum>]
+        Use vbox help <action> to get help on action
+        """)
 
     def func_help(p):
         """
@@ -56,7 +104,7 @@ class vbox:
 
         Args:
             p: Parameters object
-        
+
         Returns:
             Boolean true on success, false otherwise
         """
@@ -65,40 +113,88 @@ class vbox:
             func = getattr(vbox, "help_" + opts.cmd[1])
         except AttributeError:
             print("Invalid action")
+        except IndexError:
+            print(vbox.help_main())
         else:
             func()
 
-
-
     def func_create(p):
+        """
+        Function to create VM
+
+        Args:
+            p: Parameters Object
+        """
         p.add_argument("--name", required=True)
         p.add_argument("--host", required=True)
         p.add_argument("--ostype", required=True)
+        p.add_argument("--id", required=True)
         p.add_argument("--mem", required=True)
         p.add_argument("--disk", required=True, type=float)
         p.add_argument("--iso")
+        p.add_argument("--vmpath")
 
-        opts = p.parse_args()
-        if executer.run("VBoxManage createvm --name \"{0}\" --ostype \"{1}\" --register".format(opts.name, opts.ostype)) != 0:
-            print("Unable to create VM")
+        if p: opts = p.parse_args()
+
+        vmlist = vbox.func_list(None, False, True)
+
+        if opts.name in [x[0] for x in vmlist]:
+            print("VM with the same name already exists")
             return False
 
-        if executer.run("VBoxManage storagectl \"{0}\" --name IDE --add ide".format(opts.name)) != 0:
-            print("Unable to add IDE storage controller")
+        if vbox._getplatform() == "CYGWIN":
+            if opts.vmpath :
+                finalpath = vbox._getwinpath(opts.vmpath)
+            elif "CYG_VMPATH" in os.environ.keys():
+                finalpath = vbox._getwinpath(os.environ["CYG_VMPATH"])
+            elif "VMPATH" in os.environ.keys():
+                finalpath = os.environ["VMPATH"]
+            else:
+                finalpath = None
+
+        else:
+            if opts.vmpath: finalpath = overridepath
+            elif "VMPATH" in os.environ.keys(): finalpath = os.environ["VMPATH"]
+            else: finalpath = None
+        if not finalpath:
+            print("Path not specified and does not exist is environment variables")
             return False
 
-        if executer.run("VBoxManage storagectl \"{0}\" --name SATA --add sata".format(opts.name)) != 0:
-            print("Unable to add SATA storage controller")
-            return False
 
-        os.mkdir(basedir + opts.name)
+        vbox._shellrunner("VBoxManage createvm --name \"{0}\" --ostype {1} --register", (opts.name, opts.ostype))
 
+        vbox._addstoragectl(opts.name, "IDE", "ide")
+        vbox._addstoragectl(opts.name, "SATA", "sata")
+
+        vbox._modifymem(opts.name, opts.mem)
+
+        if vbox._getplatform() == "CYGWIN":
+            storagepath = vbox._getcygpath(finalpath)
+            vdifilepath = finalpath.strip("\\") + "\\{0}\\{0}.vdi".format(opts.name)
+        else:
+            storagepath = finalpath
+            vdifilepath = os.path.join(storagepath, opts.name, "{0}.vdi".format(opts.name))
+
+        if not os.path.exists(os.path.join(storagepath, opts.name)): os.mkdir(os.path.join(storagepath, opts.name))
+
+        vbox._shellrunner("VBoxManage createmedium disk --filename \"{0}\" --size {1} --format VDI --variant Standard", (vdifilepath, int(opts.disk * 1024)))
+
+        vbox._storageattach(opts.name, vdifilepath, "SATA", "hdd")
+
+        vbox._modifynic(opts.name, 1, 'nat')
+        vbox._modifynic(opts.name, 2, 'hostonly')
+        vbox._modifynic(opts.name, 3, 'intnet')
+
+        if opts.iso:
+            isopath = opts.iso
+            if vbox._getplatform() == "CYGWIN": isopath = vbox._getwinpath(opts.iso)
+            vbox._storageattach(opts.name, isopath, "IDE", "dvddrive")
 
 
     def help_create():
         print("Usage: vbox create --name <name> --host <hostname> --id <id> --ostype <ostype> --mem <mem> --disk <disk> [--iso <isopath>]")
 
-    def func_list(p, onlyrunning=False):
+    def func_list(p, onlyrunning=False, returnvms=False):
         """
         Lists all VMs or running VMs
 
@@ -109,12 +205,15 @@ class vbox:
         Returns:
             Bool True if command succeeds, False if parameter AttributeError
         """
-        opts = p.parse_args()
         if onlyrunning: suffix = "runningvms"
         else: suffix = "vms"
 
         ret = vbox._shellrunner("VBoxManage list {0}", (suffix, ), True)
-        print(ret.output)
+        matches = re.findall('"(.*?)"\s*\{(.*?)\}', ret.output, re.M)
+        if not returnvms:
+            for x in matches: print("Name: {0}, uuid: {1}, systemid: {2}, hostname: {3}".format(x[0], x[1], vbox._getextradata(x[0], "ID"), vbox._getextradata(x[0],"hostname")))
+        else:
+            return matches
         return True
 
     def help_list():
@@ -123,17 +222,17 @@ class vbox:
         """
         print("Usage: vbox list")
 
-    def func_listrunning(p):
+    def func_listrunning(p, returnvmms=False):
         """
         List running VMs
 
         Args:
             p: Parameters object
-        
+
         Returns:
             output of func_list
         """
-        return vbox.func_list(p, True)
+        return vbox.func_list(p, True, returnvms)
 
     def help_listrunning():
         """
@@ -279,26 +378,46 @@ class vbox:
         """
         print("Usage: vbox powerbutton <vmname>")
 
+    def func_setextradata(p):
+        """
+        Set VM extradata
+
+        Args:
+            p: Parameters object
+        Returns:
+            True if command succeeds, false on parameter error
+        """
+        p.add_argument("--key", required=True)
+        p.add_argument("--value", required=True)
+        opts = p.parse_args()
+        if len(opts.cmd) != 2:
+            help_setextradata()
+            return False
+        vbox._setextradata(opts.cmd[1], opts.key, opts.value)
+        return True
+
+    def help_setextradata():
+        """
+        Help for vbox setextradata
+        """
+        print("Usage: vbox setextradata <vmname> --key <key> --value <value>")
+
+
 def main():
-    help_main = """Usage: vbox [action] [vmname] [parameters]
-    Action is:
-        list
-        listrunning
-        create
-        addiso
-    Use vbox help <action> to get help on action
     """
-    p = argparse.ArgumentParser(description="VBox argument parser", usage=help_main)
+    Entry point for vbox manager
+    """
+    p = argparse.ArgumentParser(description="VBox argument parser", usage=vbox.help_main())
     p.add_argument('cmd', nargs="+", help="action")
     if len(sys.argv) == 0:
         print("Please use an action")
-        print(help_main)
+        print(vbox.help_main())
         sys.exit(1)
     try:
         func = getattr(vbox, "func_" + sys.argv[1])
     except AttributeError:
         print("Invalid command")
-        print(help_main)
+        print(vbox.help_main())
         sys.exit(-1)
     else: func(p)
 

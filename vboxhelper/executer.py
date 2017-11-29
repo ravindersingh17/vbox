@@ -3,6 +3,7 @@ import os
 
 class executer:
     def run(command):
+        #print(command)
         return subprocess.run(command, shell=True)
 
     def runwithoutput(command):
