@@ -3,6 +3,8 @@
 import sys, os, re, argparse, platform
 
 from vboxhelper.executer import executer
+from vboxhelper.settings import settings
+from vboxhelper.dnsmanager import dnsmanager
 from vboxhelper.VBoxException import VBoxException
 
 class vbox:
@@ -10,13 +12,14 @@ class vbox:
     Module that provides most of the functionality of VirtualBox manager
     """
 
+    settings = VBoxSettings()
+
     def _getplatform():
         ostype = platform.system()
         if ostype == "Windows": return "WINDOWS"
         elif ostype == "Linux": return "LINUX"
         elif ostype[:6] == "CYGWIN": return "CYGWIN"
         else: return False
-
 
     def _addstoragectl(vmname, ctlname, ctltype):
         vbox._shellrunner("VBoxManage storagectl \"{0}\" --name {1} --add {2}", (vmname, ctlname, ctltype))
@@ -48,6 +51,14 @@ class vbox:
             match = re.match("Value:\s*(.*)", ret.output.strip())
             return match.group(1)
 
+    def _getvmdata(onlyrunning = False):
+        listof = "vms"
+        if onlyrunning: listof = "runningvms"
+        ret = vbox._shellrunner("VBoxManage list {0}", (listof, ), True)
+        matches = re.findall('"(.*?)"\s*\{(.*?)\}', ret.output, re.M)
+        vmdata = []
+        for x in matches: vmdata.append({"name": x[0], "uuid": x[1], "netid": vbox._getextradata(x[0], "ID"), "hostname": vbox._getextradata(x[0],"hostname")})
+        return vmdata
 
     def _shellrunner(cmd, params, returnoutput=False):
         """
@@ -136,7 +147,7 @@ class vbox:
 
         if p: opts = p.parse_args()
 
-        vmlist = vbox.func_list(None, False, True)
+        vmdata = vbox._getvmdata()
 
         if opts.name in [x[0] for x in vmlist]:
             print("VM with the same name already exists")
@@ -144,21 +155,16 @@ class vbox:
 
         if vbox._getplatform() == "CYGWIN":
             if opts.vmpath :
-                finalpath = vbox._getwinpath(opts.vmpath)
-            elif "CYG_VMPATH" in os.environ.keys():
-                finalpath = vbox._getwinpath(os.environ["CYG_VMPATH"])
-            elif "VMPATH" in os.environ.keys():
-                finalpath = os.environ["VMPATH"]
+                vmpath = vbox._getwinpath(opts.vmpath)
             else:
-                finalpath = None
-
+                vmpath = vbox._getwinpath(vbox.settings.disk_path)
         else:
-            if opts.vmpath: finalpath = overridepath
-            elif "VMPATH" in os.environ.keys(): finalpath = os.environ["VMPATH"]
-            else: finalpath = None
-        if not finalpath:
-            print("Path not specified and does not exist is environment variables")
-            return False
+            if opts.vmpath: vmpath = opts.vmpath
+            else:
+                vmpath = vbox.settings.disk_path
+
+        if not vmpath:
+            raise VBoxException("Path not specified and does not exist in settings")
 
 
         vbox._shellrunner("VBoxManage createvm --name \"{0}\" --ostype {1} --register", (opts.name, opts.ostype))
@@ -169,10 +175,10 @@ class vbox:
         vbox._modifymem(opts.name, opts.mem)
 
         if vbox._getplatform() == "CYGWIN":
-            storagepath = vbox._getcygpath(finalpath)
-            vdifilepath = finalpath.strip("\\") + "\\{0}\\{0}.vdi".format(opts.name)
+            storagepath = vbox._getcygpath(vmpath)
+            vdifilepath = vmpath.strip("\\") + "\\{0}\\{0}.vdi".format(opts.name)
         else:
-            storagepath = finalpath
+            storagepath = vmpath
             vdifilepath = os.path.join(storagepath, opts.name, "{0}.vdi".format(opts.name))
 
         if not os.path.exists(os.path.join(storagepath, opts.name)): os.mkdir(os.path.join(storagepath, opts.name))
@@ -190,6 +196,11 @@ class vbox:
             if vbox._getplatform() == "CYGWIN": isopath = vbox._getwinpath(opts.iso)
             vbox._storageattach(opts.name, isopath, "IDE", "dvddrive")
 
+        if opts.id in [ x["netid"] for x in vmdata ]: print("ID is already taken, run vbox updatesetings <vmname> to correct setting")
+        if opts.hostname in [ x["hostname"] for x in vmdata ]: print("Hostname is already taken, run vbox updatesettings <vmname to correct setting")
+
+        dns = dnsmanager(vbox.settings.bind_path)
+        dns.update(opts.name, opts.id, opts.host)
 
     def help_create():
         print("Usage: vbox create --name <name> --host <hostname> --id <id> --ostype <ostype> --mem <mem> --disk <disk> [--iso <isopath>]")
@@ -208,12 +219,6 @@ class vbox:
         if onlyrunning: suffix = "runningvms"
         else: suffix = "vms"
 
-        ret = vbox._shellrunner("VBoxManage list {0}", (suffix, ), True)
-        matches = re.findall('"(.*?)"\s*\{(.*?)\}', ret.output, re.M)
-        if not returnvms:
-            for x in matches: print("Name: {0}, uuid: {1}, systemid: {2}, hostname: {3}".format(x[0], x[1], vbox._getextradata(x[0], "ID"), vbox._getextradata(x[0],"hostname")))
-        else:
-            return matches
         return True
 
     def help_list():
