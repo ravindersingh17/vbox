@@ -1,0 +1,6 @@
+#!/bin/env python3
+
+from vboxhelper import vbox
+
+if __name__=="__main__":
+    vbox.main()
