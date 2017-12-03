@@ -23,13 +23,9 @@ class vboxcustom(Command):
             self.int_net = "192.168.100.x"
 
     def run(self):
-        print(self.disk_path)
-        print(self.host_net)
-        print(self.int_net)
-        sys.exit()
         settings_file = os.path.expanduser("~/.vbox")
 
-        settings = {"disk_path": self.disk_path, "host_net": self.host_net, "internal_net": self.int_net }
+        settings = {"disk_path": self.disk_path, "host_net": self.host_net, "int_net": self.int_net }
 
         f = open(settings_file, 'w')
         f.write(json.dumps(settings))
@@ -43,6 +39,8 @@ setup(
         author="Ravinder Singh",
         author_email="ravinder.ssgh@gmail.com",
         url="https://github.com/ravindersingh17/vbox",
+        python_requires=">=3",
+        install_requires=["dnspython"],
         packages=["vboxhelper"],
         scripts=["scripts/vbox"],
         cmdclass={
