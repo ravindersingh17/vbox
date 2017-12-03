@@ -45,19 +45,13 @@ class dnsmanager():
         nsrdataset.add(nsrecord)
         aintrdataset.add(aintrecord)
 
-        print(zone.to_text().decode("utf-8"))
 
         conf = ""
         hostlist.append(hostname)
         for host in hostlist:
             conf += """zone "{0}." {{
                        type master;
-                    file "{0}.zone";
+                       file "{0}.zone";
                     }};
                     """.format(host)
-        print(conf)
 
-
-#Debug
-d = dnsmanager("foo")
-d.update("foo", "192.168.56.1", "192.168.100.1", [])
