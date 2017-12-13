@@ -13,6 +13,7 @@ class vboxcustom(install):
         self.disk_path = None
         self.host_net = None
         self.int_net = None
+        super(vboxcustom, self).initialize_options()
 
     def finalize_options(self):
         if self.disk_path is None:
@@ -21,6 +22,7 @@ class vboxcustom(install):
             self.host_net = "192.168.56.x"
         if self.int_net is None:
             self.int_net = "192.168.100.x"
+        super(vboxcustom, self).finalize_options()
 
     def run(self):
         settings_file = os.path.expanduser("~/.vbox")
