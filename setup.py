@@ -3,7 +3,7 @@ from setuptools.command.install import install
 import os, json, sys
 
 class vboxcustom(install):
-    user_options = user_options + [
+    user_options = install.user_options + [
             ("disk-path=", None, "Location where vbox disk files will be stored."),
             ("host-net=", None, "Network for host only network. Default 192.168.56.x"),
             ("int-net=", None, "Network for internal network. Default 192.168.100.x"),
