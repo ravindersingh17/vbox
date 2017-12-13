@@ -12,7 +12,7 @@ class vbox:
     Module that provides most of the functionality of VirtualBox manager
     """
 
-    settings = VBoxSettings()
+    settingsObj = settings()
 
     def _getplatform():
         ostype = platform.system()
@@ -42,14 +42,15 @@ class vbox:
         vbox._shellrunner("VBoxManage modifyvm \"{0}\" --nic{1} {2}", (vmname, nicnum, adaptertype))
 
     def _setextradata(vmname, datakey, datavalue):
-        vbox._shellrunner("VBoxManage setextradata \"{0}\" \"{1}\" \"{2}\"", (vmname, datakey, datavalue))
+        vboxData = settings.getAll()
+        vboxData[vmname][datakey] = datavalue
+        settings.writeToDisk()
 
     def _getextradata(vmname, datakey):
-        ret = vbox._shellrunner("VBoxManage getextradata \"{0}\" \"{1}\"", (vmname, datakey), True)
-        if ret.output.strip() == "No value set!": return None
-        else:
-            match = re.match("Value:\s*(.*)", ret.output.strip())
-            return match.group(1)
+        vboxData = vbox.settings.getAll()
+        if datakey not in vboxData[vmname]:
+            raise VBoxException
+        return vboxData[vmname][datakey]
 
     def _getvmdata(onlyrunning = False):
         listof = "vms"
@@ -57,7 +58,8 @@ class vbox:
         ret = vbox._shellrunner("VBoxManage list {0}", (listof, ), True)
         matches = re.findall('"(.*?)"\s*\{(.*?)\}', ret.output, re.M)
         vmdata = []
-        for x in matches: vmdata.append({"name": x[0], "uuid": x[1], "netid": vbox._getextradata(x[0], "ID"), "hostname": vbox._getextradata(x[0],"hostname")})
+        vboxData = vbox.settingsObj.getData()
+        for x in matches: vmdata.append({"name": x[0], "uuid": x[1], "netid": vboxData[x[0]]["ID"], "hostname": vboxData[x[0]]["hostname"]})
         return vmdata
 
     def _shellrunner(cmd, params, returnoutput=False):
@@ -149,7 +151,7 @@ class vbox:
 
         vmdata = vbox._getvmdata()
 
-        if opts.name in [x[0] for x in vmlist]:
+        if opts.name in [x["name"] for x in vmdata]:
             print("VM with the same name already exists")
             return False
 
@@ -196,11 +198,17 @@ class vbox:
             if vbox._getplatform() == "CYGWIN": isopath = vbox._getwinpath(opts.iso)
             vbox._storageattach(opts.name, isopath, "IDE", "dvddrive")
 
-        if opts.id in [ x["netid"] for x in vmdata ]: print("ID is already taken, run vbox updatesetings <vmname> to correct setting")
-        if opts.hostname in [ x["hostname"] for x in vmdata ]: print("Hostname is already taken, run vbox updatesettings <vmname to correct setting")
+        if opts.id in [ x["netid"] for x in vmdata ]: 
+            print("ID is already taken, run vbox updatesetings <vmname> to correct setting")
+            return
+        if opts.hostname in [ x["hostname"] for x in vmdata ]: 
+            print("Hostname is already taken, run vbox updatesettings <vmname to correct setting")
+            return
 
-        dns = dnsmanager(vbox.settings.bind_path)
-        dns.update(opts.name, opts.id, opts.host)
+        dns = dnsmanager(vmdata["bind_path"])
+        vbox._setextradata(opts.vmname, "netid", opts.id)
+        vbox._setextradata(opts.vmname, "hostname", opts.host)
+        #dns.update(opts.name, opts.id, opts.host)
 
     def help_create():
         print("Usage: vbox create --name <name> --host <hostname> --id <id> --ostype <ostype> --mem <mem> --disk <disk> [--iso <isopath>]")
