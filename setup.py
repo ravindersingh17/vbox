@@ -65,6 +65,7 @@ class vboxcustomdevelop(develop):
 
         f = open(settings_file, 'w')
         f.write(json.dumps(settings))
+        print("Executing develop steps....")
 
         super(vboxcustomdevelop, self).run()
 
@@ -81,6 +82,7 @@ setup(
         scripts=["scripts/vbox"],
         cmdclass={
             "install": vboxcustom,
+            "develop": vboxcustomdevelop,
             }
         )
 
