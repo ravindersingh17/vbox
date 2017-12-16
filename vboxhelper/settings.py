@@ -5,7 +5,7 @@ class settings:
     def __init__(self):
         homeDir = os.path.expanduser("~")
         self.dataFile = os.path.join(homeDir, ".vbox", "data.json")
-        self.data = json.loads(open(dataFile).read())
+        self.data = json.loads(open(self.dataFile).read())
 
     def getAll(self):
         return self.data
