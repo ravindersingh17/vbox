@@ -3,12 +3,29 @@ from setuptools.command.install import install
 from setuptools.command.develop import develop
 import os, json, sys
 
-class vboxcustom(install):
-    user_options = install.user_options + [
+class vboxinstallcommon:
+    user_options = [
             ("disk-path=", None, "Location where vbox disk files will be stored."),
             ("host-net=", None, "Network for host only network. Default 192.168.56.x"),
             ("int-net=", None, "Network for internal network. Default 192.168.100.x"),
                   ]
+
+    default_disk_path = os.path.join(os.path.expanduser("~"), "vbox VMs")
+    default_host_net = "192.168.56.x"
+    default_int_net = "192.168.100.x"
+
+    def run(settings):
+        vboxdir = os.path.join(os.path.expanduser("~"), ".vbox")
+        if not os.path.exists(vboxdir):
+            os.makedirs(vboxdir)
+        settings_file = os.path.join(os.path.expanduser("~"), ".vbox", "settings.json")
+
+        handle = open(settings_file, "w")
+        handle.write(json.dumps(settings))
+        handle.close()
+
+class vboxcustom(install):
+    user_options = install.user_options + vboxinstallcommon.user_options
 
     def initialize_options(self):
         self.disk_path = None
@@ -18,30 +35,21 @@ class vboxcustom(install):
 
     def finalize_options(self):
         if self.disk_path is None:
-            self.disk_path = os.path.expanduser("~/vbox VMs")
+            self.disk_path = vboxinstallcommon.default_disk_path
         if self.host_net is None:
-            self.host_net = "192.168.56.x"
+            self.host_net = vboxinstallcommon.default_host_net
         if self.int_net is None:
             self.int_net = "192.168.100.x"
         super(vboxcustom, self).finalize_options()
 
     def run(self):
-
-        settings_file = os.path.join(os.path.expanduser("~"), ".vbox", "data.json")
-
         settings = {"disk_path": self.disk_path, "host_net": self.host_net, "int_net": self.int_net }
-
-        f = open(settings_file, 'w')
-        f.write(json.dumps(settings))
+        vboxinstallcommon.run(settings)
 
         super(vboxcustom, self).run()
 
 class vboxcustomdevelop(develop):
-    user_options = develop.user_options + [
-            ("disk-path=", None, "Location where vbox disk files will be stored."),
-            ("host-net=", None, "Network for host only network. Default 192.168.56.x"),
-            ("int-net=", None, "Network for internal network. Default 192.168.100.x"),
-                  ]
+    user_options = develop.user_options + vboxinstallcommon.user_options
 
     def initialize_options(self):
         self.disk_path = None
@@ -51,22 +59,16 @@ class vboxcustomdevelop(develop):
 
     def finalize_options(self):
         if self.disk_path is None:
-            self.disk_path = os.path.expanduser("~/vbox VMs")
+            self.disk_path = vboxinstallcommon.default_disk_path
         if self.host_net is None:
-            self.host_net = "192.168.56.x"
+            self.host_net = vboxinstallcommon.default_host_net
         if self.int_net is None:
-            self.int_net = "192.168.100.x"
+            self.int_net = vboxinstallcommon.default_int_net
         super(vboxcustomdevelop, self).finalize_options()
 
     def run(self):
-        settings_file = os.path.join(os.path.expanduser("~"), ".vbox", "data.json")
-
         settings = {"disk_path": self.disk_path, "host_net": self.host_net, "int_net": self.int_net }
-
-        f = open(settings_file, 'w')
-        f.write(json.dumps(settings))
-        print("Executing develop steps....")
-
+        vboxinstallcommon.run(settings)
         super(vboxcustomdevelop, self).run()
 
 setup(
