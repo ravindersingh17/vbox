@@ -4,7 +4,6 @@ import sys, os, re, argparse, platform
 
 from vboxhelper.executer import executer
 from vboxhelper.settings import settings
-from vboxhelper.dnsmanager import dnsmanager
 from vboxhelper.VBoxException import VBoxException
 
 class vbox:
@@ -42,12 +41,14 @@ class vbox:
         vbox._shellrunner("VBoxManage modifyvm \"{0}\" --nic{1} {2}", (vmname, nicnum, adaptertype))
 
     def _setextradata(vmname, datakey, datavalue):
-        vboxData = settings.getAll()
+        vboxData = vbox.settingsObj.getAll()
+        if vmname not in vboxData:
+            vboxData[vmname] = {}
         vboxData[vmname][datakey] = datavalue
-        settings.writeToDisk()
+        vbox.settingsObj.writeToDisk()
 
     def _getextradata(vmname, datakey):
-        vboxData = vbox.settings.getAll()
+        vboxData = vbox.settingsObj.getAll()
         if datakey not in vboxData[vmname]:
             raise VBoxException
         return vboxData[vmname][datakey]
@@ -207,7 +208,7 @@ class vbox:
 
         dns = dnsmanager(vmdata["bind_path"])
         vbox._setextradata(opts.vmname, "netid", opts.id)
-        vbox._setextradata(opts.vmname, "hostname", opts.host)
+        vbox._setextradata(opts.vmname, "host", opts.host)
         #dns.update(opts.name, opts.id, opts.host)
 
     def help_create():
@@ -227,6 +228,8 @@ class vbox:
         if onlyrunning: suffix = "runningvms"
         else: suffix = "vms"
 
+        vbox._shellrunner("VBoxManage list {0}", (suffix, ))
+
         return True
 
     def help_list():
@@ -235,7 +238,7 @@ class vbox:
         """
         print("Usage: vbox list")
 
-    def func_listrunning(p, returnvmms=False):
+    def func_listrunning(p, returnvms=False):
         """
         List running VMs
 
@@ -404,7 +407,7 @@ class vbox:
         p.add_argument("--value", required=True)
         opts = p.parse_args()
         if len(opts.cmd) != 2:
-            help_setextradata()
+            vbox.help_setextradata()
             return False
         vbox._setextradata(opts.cmd[1], opts.key, opts.value)
         return True

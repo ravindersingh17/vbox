@@ -1,10 +1,13 @@
 import subprocess
 import os
 
+class retdata: pass
+
 class executer:
     def run(command):
-        #print(command)
-        return subprocess.call(command, shell=True)
+        ret = retdata()
+        ret.returncode = subprocess.call(command, shell=True)
+        return ret
 
     def runwithoutput(command):
         ret = subprocess.call(command, stdout=subprocess.PIPE, shell=True)

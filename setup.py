@@ -18,7 +18,7 @@ class vboxinstallcommon:
         vboxdir = os.path.join(os.path.expanduser("~"), ".vbox")
         if not os.path.exists(vboxdir):
             os.makedirs(vboxdir)
-        settings_file = os.path.join(os.path.expanduser("~"), ".vbox", "settings.json")
+        settings_file = os.path.join(os.path.expanduser("~"), ".vbox", "data.json")
 
         handle = open(settings_file, "w")
         handle.write(json.dumps(settings))

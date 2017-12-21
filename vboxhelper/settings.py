@@ -12,4 +12,4 @@ class settings:
 
     def writeToDisk(self):
         fhandle = open(self.dataFile, 'w')
-        fhandle.write(json.dumps(data))
+        fhandle.write(json.dumps(self.data))
