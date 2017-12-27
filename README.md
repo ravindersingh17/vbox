@@ -1,1 +1,1 @@
-# VirtualBox easy manager, also provides DNS management through bind
+# VirtualBox easy manager, also provides DNS management through bind.
